@@ -16,7 +16,7 @@ from lightkube.types import PatchType
 from ops.charm import CharmBase
 from ops.main import main
 from ops.model import ActiveStatus, WaitingStatus
-from ops.pebble import Layer
+from ops.pebble import ExecError, Layer
 
 from network_attachment_definition import NetworkAttachmentDefinition
 
@@ -51,9 +51,10 @@ class Free5GcUPFOperatorCharm(CharmBase):
             self._create_n4_network_attachement_definition()
         if not self._n6_network_attachment_definition_created:
             self._create_n6_network_attachement_definition()
-        # if not self._annotation_added_to_statefulset:
-        #     self._add_statefulset_pod_network_annotation()
-        self._configure_networking_rules()
+        if not self._annotation_added_to_statefulset:
+            self._add_statefulset_pod_network_annotation()
+        if not self._networking_rules_are_created:
+            self._configure_networking_rules()
         self._container.add_layer("free5gc-upf", self._pebble_layer, combine=True)
         self._container.replan()
         self.unit.status = ActiveStatus()
@@ -63,15 +64,54 @@ class Free5GcUPFOperatorCharm(CharmBase):
         self._delete_n4_network_attachement_definition()
         self._delete_n6_network_attachement_definition()
 
-    def _configure_networking_rules(self):
-        """
-        TODO: This should be done only once
-        """
+    @property
+    def _networking_rules_are_created(self) -> bool:
+        process = self._container.exec(command=["ip", "rule", "list"])
+        try:
+            exec_return = process.wait_output()
+        except ExecError as e:
+            logger.error("Exited with code %d. Stderr:", e.exit_code)
+            for line in e.stderr.splitlines():
+                logger.error("    %s", line)
+            return False
+        if "from 10.1.0.0/16 table n6if" in exec_return[0]:
+            logger.info("Networking rule already created")
+            return True
+        logger.info("Networking rule not yet created")
+        return False
+
+    def _configure_networking_rules(self) -> None:
         self._container.exec(command=["iptables-legacy", "-A", "FORWARD", "-j", "ACCEPT"])
-        self._container.exec(command=["iptables-legacy", "-t", "nat", "-A", "POSTROUTING", "-s", "10.1.0.0/16", "-o", "n6", "-j", "MASQUERADE"])
+        self._container.exec(
+            command=[
+                "iptables-legacy",
+                "-t",
+                "nat",
+                "-A",
+                "POSTROUTING",
+                "-s",
+                "10.1.0.0/16",
+                "-o",
+                "n6",
+                "-j",
+                "MASQUERADE",
+            ]
+        )
         self._container.exec(command=["echo", "1200 n6if", ">>", "/etc/iproute2/rt_tables"])
         self._container.exec(command=["ip", "rule", "add", "from", "10.1.0.0/16", "table", "n6if"])
-        self._container.exec(command=["ip", "route", "add", "default", "via", self._config_n6_gateway, "dev", "n6", "table" "n6if"])
+        self._container.exec(
+            command=[
+                "ip",
+                "route",
+                "add",
+                "default",
+                "via",
+                self._config_n6_gateway,
+                "dev",
+                "n6",
+                "table" "n6if",
+            ]
+        )
 
     @property
     def _n3_network_attachment_definition_created(self) -> bool:
@@ -253,14 +293,6 @@ class Free5GcUPFOperatorCharm(CharmBase):
         )
         self._container.push(path=f"{BASE_CONFIG_PATH}/{CONFIG_FILE_NAME}", source=content)
         logger.info(f"Pushed {CONFIG_FILE_NAME} config file")
-
-    @property
-    def _config_file_is_written(self) -> bool:
-        if not self._container.exists(f"{BASE_CONFIG_PATH}/{CONFIG_FILE_NAME}"):
-            logger.info(f"Config file is not written: {CONFIG_FILE_NAME}")
-            return False
-        logger.info("Config file is written")
-        return True
 
     @property
     def _config_n3_cidr(self) -> str:
