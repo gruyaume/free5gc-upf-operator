@@ -1,0 +1,22 @@
+name: free5gc-upf-operator
+display-name: free5gc upf operator
+summary: Free5gc upf operator
+description: Free5gc upf operator
+
+containers:
+  free5gc-upf:
+    resource: free5gc-upf-image
+    mounts:
+      - storage: upf-volume
+        location: /free5gc/config/
+
+resources:
+  free5gc-upf-image:
+    type: oci-image
+    description: OCI image for free5gc-upf
+    upstream-source: ghcr.io/gruyaume/free5gc-upf:1.1.0
+
+storage:
+  upf-volume:
+    type: filesystem
+    minimum-size: 1M

@@ -1,0 +1,37 @@
+options:
+  n3-cidr:
+    type: string
+    default: 10.100.50.233/29
+    description: N3 interface ip address
+  n3-gateway:
+    type: string
+    default: 10.100.50.238
+    description: N3 Gateway
+  n4-cidr:
+    type: string
+    default: 10.100.50.241/29
+    description: N4 interface ip address
+  n4-gateway:
+    type: string
+    default: 10.100.50.246
+    description: N4 Gateway
+  n6-cidr:
+    type: string
+    default: 10.100.100.12/24
+    description: N6 interface ip address
+  n6-gateway:
+    type: string
+    default: 10.100.100.1
+    description: N6 Gateway
+  n3-interface:
+    type: string
+    default: eth0
+    description: N3 interface
+  n4-interface:
+    type: string
+    default: eth0
+    description: N4 interface
+  n6-interface:
+    type: string
+    default: eth1
+    description: N6 interface
